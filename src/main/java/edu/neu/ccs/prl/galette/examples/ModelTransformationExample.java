@@ -56,6 +56,13 @@ public class ModelTransformationExample {
 
         // Initialize the symbolic execution environment
         System.out.println("Initializing Galette symbolic execution environment...");
+        
+        // Debug: Check system property
+        System.out.println("🔧 DEBUG: galette.concolic.interception.enabled = " + 
+            System.getProperty("galette.concolic.interception.enabled"));
+        System.out.println("🔧 DEBUG: Boolean.getBoolean result = " + 
+            Boolean.getBoolean("galette.concolic.interception.enabled"));
+            
         SymbolicExecutionWrapper.reset(); // Start with clean state
 
         // Create a sample brake disc source model
