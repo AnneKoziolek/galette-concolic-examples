@@ -5,28 +5,16 @@
 
 set -e  # Exit on any error
 
+# Ensure Java 17 is used for builds and execution
+export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+export PATH="$JAVA_HOME/bin:$PATH"
+
 echo "🚀 Galette Concolic Examples"
 echo "============================="
-
-# Determine JAVA_HOME if not set
-if [ -z "$JAVA_HOME" ]; then
-    echo "🔍 JAVA_HOME not set, attempting to detect..."
-    # Try to find JAVA_HOME from java command
-    if command -v java >/dev/null 2>&1; then
-        JAVA_EXECUTABLE=$(command -v java)
-        # Follow symlinks to get real path
-        JAVA_EXECUTABLE=$(readlink -f "$JAVA_EXECUTABLE" 2>/dev/null || realpath "$JAVA_EXECUTABLE" 2>/dev/null || echo "$JAVA_EXECUTABLE")
-        # Get JAVA_HOME by going up from bin/java
-        JAVA_HOME=$(dirname "$(dirname "$JAVA_EXECUTABLE")")
-        echo "✅ Detected JAVA_HOME: $JAVA_HOME"
-        export JAVA_HOME
-    else
-        echo "❌ Could not detect Java installation. Please set JAVA_HOME."
-        exit 1
-    fi
-else
-    echo "✅ Using existing JAVA_HOME: $JAVA_HOME"
-fi
+echo "☕ Java Configuration:"
+echo "   JAVA_HOME: $JAVA_HOME"
+echo "   Java version: $(java -version 2>&1 | head -1)"
+echo ""
 
 # Configuration
 GALETTE_PROJECT_DIR="../galette-concolic-model-transformation"
