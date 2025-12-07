@@ -2,7 +2,7 @@ package edu.neu.ccs.prl.galette.examples;
 
 import edu.neu.ccs.prl.galette.concolic.knarr.runtime.GaletteSymbolicator;
 import edu.neu.ccs.prl.galette.concolic.knarr.runtime.PathConditionWrapper;
-import edu.neu.ccs.prl.galette.concolic.knarr.runtime.PathUtils;
+import edu.neu.ccs.prl.galette.concolic.knarr.runtime.GalettePathUtils;
 import edu.neu.ccs.prl.galette.examples.models.source.BrakeDiscSource;
 import edu.neu.ccs.prl.galette.examples.models.target.BrakeDiscTarget;
 import edu.neu.ccs.prl.galette.examples.transformation.BrakeDiscTransformation;
@@ -47,7 +47,7 @@ public class ModelTransformationExample {
 
     public static void main(String[] args) {
         System.out.println(repeatString("=", 80));
-        System.out.println("GALETTE CONCOLIC EXECUTION DEMO: MODEL TRANSFORMATION");
+        System.out.println("GALETTE CONCOLIC EXECUTION DEMO: MODEL TRANSFORMATION (in external project)");
         System.out.println(repeatString("=", 80));
         System.out.println();
         System.out.println("This example demonstrates how Galette can track symbolic values");
@@ -276,7 +276,7 @@ public class ModelTransformationExample {
     private static ConcolicResult executeConcolic(BrakeDiscSource source, double thickness, String label) {
         // Reset symbolic execution state
         GaletteSymbolicator.reset();
-        PathUtils.resetPC();
+        GalettePathUtils.resetPC();
 
         // Create symbolic value for thickness - we need to get the TAGGED VALUE, not just the tag
         Tag symbolicTag = GaletteSymbolicator.makeSymbolicDouble(label, thickness);
@@ -301,7 +301,7 @@ public class ModelTransformationExample {
         System.out.println("🔧 BrakeDiscTransformation.transform() completed");
 
         // Collect path constraints
-        PathConditionWrapper pc = PathUtils.getCurPCWithGalette();
+        PathConditionWrapper pc = GalettePathUtils.getCurPCWithGalette();
         String constraintDescription = "no constraints";
         boolean hasConstraints = false;
 
@@ -358,7 +358,7 @@ public class ModelTransformationExample {
 
         // Fallback: Generate alternative inputs based on analysis of explored inputs
         // Use dynamic threshold discovery from path constraints
-        PathConditionWrapper pc = PathUtils.getCurPCWithGalette();
+        PathConditionWrapper pc = GalettePathUtils.getCurPCWithGalette();
         Set<Double> discoveredThresholds = new HashSet<>();
         if (pc != null && !pc.isEmpty()) {
             List<Expression> constraints = pc.getConstraints();
@@ -407,7 +407,7 @@ public class ModelTransformationExample {
      */
     private static Double exploreBoundaryConditions(List<Double> exploredInputs) {
         // Discover thresholds dynamically from path constraints
-        PathConditionWrapper pc = PathUtils.getCurPCWithGalette();
+        PathConditionWrapper pc = GalettePathUtils.getCurPCWithGalette();
         Set<Double> discoveredThresholds = new HashSet<>();
         if (pc != null && !pc.isEmpty()) {
             List<Expression> constraints = pc.getConstraints();
