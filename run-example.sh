@@ -19,6 +19,110 @@ echo ""
 # Configuration
 GALETTE_PROJECT_DIR="../galette-concolic-model-transformation"
 GALETTE_AGENT_JAR="$GALETTE_PROJECT_DIR/galette-agent/target/galette-agent-1.0.0-SNAPSHOT.jar"
+GREEN_SOLVER_DIR="../green-solver"
+GREEN_SERVER_PORT=9408
+GREEN_SERVER_PID=""
+
+# Function to check if GreenServer is already running
+is_green_server_running() {
+    nc -z localhost $GREEN_SERVER_PORT 2>/dev/null
+    return $?
+}
+
+# Function to start the GreenServer in a separate non-instrumented JVM
+start_green_server() {
+    echo "🔧 Starting GreenServer (non-instrumented JVM for solver isolation)..."
+    
+    if is_green_server_running; then
+        echo "✅ GreenServer already running on port $GREEN_SERVER_PORT"
+        return 0
+    fi
+    
+    # Build greenserver if needed
+    local GREENSERVER_DIR="$GREEN_SOLVER_DIR/greenserver"
+    local GREEN_JAR="$GREEN_SOLVER_DIR/green/target/green-1.0-SNAPSHOT.jar"
+    
+    # Build green if JAR doesn't exist
+    if [ ! -f "$GREEN_JAR" ]; then
+        echo "🔨 Building green solver..."
+        (cd "$GREEN_SOLVER_DIR/green" && mvn package -DskipTests -q)
+    fi
+    
+    # Copy green JAR to greenserver lib if needed
+    if [ ! -f "$GREENSERVER_DIR/lib/green.jar" ] || [ "$GREEN_JAR" -nt "$GREENSERVER_DIR/lib/green.jar" ]; then
+        echo "📦 Updating greenserver/lib/green.jar..."
+        cp "$GREEN_JAR" "$GREENSERVER_DIR/lib/green.jar"
+    fi
+    
+    # Build greenserver using javac (ant may not be installed)
+    echo "🔨 Building greenserver..."
+    local GS_SRC="$GREENSERVER_DIR/src/za/ac/sun/cs/green/server/GreenServer.java"
+    local GS_CLASS="$GREENSERVER_DIR/bin/za/ac/sun/cs/green/server/GreenServer.class"
+    if [ ! -f "$GS_CLASS" ] || [ "$GS_SRC" -nt "$GS_CLASS" ]; then
+        mkdir -p "$GREENSERVER_DIR/bin/za/ac/sun/cs/green/server"
+        javac -cp "$GREENSERVER_DIR/lib/green.jar" -d "$GREENSERVER_DIR/bin" "$GS_SRC" 2>&1
+        if [ $? -ne 0 ]; then
+            echo "❌ Failed to compile GreenServer"
+            return 1
+        fi
+    fi
+    
+    # Build classpath for greenserver
+    local GREEN_LIB="$GREEN_SOLVER_DIR/green/lib"
+    local KNARR_Z3_LIB="../knarr/z3-4.8.9-x64-ubuntu-16.04/bin"
+    local SERVER_CP="$GREENSERVER_DIR/bin:$GREENSERVER_DIR/lib/green.jar"
+    # Use Z3 JAR from knarr for Linux compatibility
+    SERVER_CP="$SERVER_CP:$KNARR_Z3_LIB/com.microsoft.z3.jar"
+    SERVER_CP="$SERVER_CP:$GREEN_LIB/slf4j-api-1.7.12.jar"
+    SERVER_CP="$SERVER_CP:$GREEN_LIB/slf4j-simple-1.7.12.jar"
+    
+    # Set Z3 native library path (Linux .so files are in knarr)
+    export LD_LIBRARY_PATH="$KNARR_Z3_LIB:$GREEN_LIB:$LD_LIBRARY_PATH"
+    
+    # Start the server in background using NON-instrumented Java
+    echo "🚀 Starting GreenServer on port $GREEN_SERVER_PORT..."
+    java -cp "$SERVER_CP" za.ac.sun.cs.green.server.GreenServer > /tmp/greenserver.log 2>&1 &
+    GREEN_SERVER_PID=$!
+    
+    # Wait for server to start
+    echo "⏳ Waiting for GreenServer to start..."
+    local MAX_WAIT=30
+    local WAITED=0
+    while ! is_green_server_running && [ $WAITED -lt $MAX_WAIT ]; do
+        sleep 0.5
+        WAITED=$((WAITED + 1))
+        if ! kill -0 $GREEN_SERVER_PID 2>/dev/null; then
+            echo "❌ GreenServer process died. Check /tmp/greenserver.log"
+            cat /tmp/greenserver.log
+            return 1
+        fi
+    done
+    
+    if is_green_server_running; then
+        echo "✅ GreenServer started (PID: $GREEN_SERVER_PID)"
+        return 0
+    else
+        echo "❌ GreenServer failed to start within ${MAX_WAIT}s"
+        cat /tmp/greenserver.log
+        return 1
+    fi
+}
+
+# Function to stop the GreenServer
+stop_green_server() {
+    if [ -n "$GREEN_SERVER_PID" ] && kill -0 $GREEN_SERVER_PID 2>/dev/null; then
+        echo "🛑 Stopping GreenServer (PID: $GREEN_SERVER_PID)..."
+        kill $GREEN_SERVER_PID 2>/dev/null || true
+        wait $GREEN_SERVER_PID 2>/dev/null || true
+        echo "✅ GreenServer stopped"
+    fi
+}
+
+# Cleanup on exit
+cleanup() {
+    stop_green_server
+}
+trap cleanup EXIT
 
 # Function to check if dependencies are built
 check_dependencies() {
@@ -103,6 +207,11 @@ setup_instrumented_java() {
 
 # Main execution
 echo
+
+# Start GreenServer FIRST (before other builds, so it has time to start)
+start_green_server
+echo
+
 check_dependencies
 echo
 build_examples
